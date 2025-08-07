@@ -1,34 +1,38 @@
-# Read the doc: https://huggingface.co/docs/hub/spaces-sdks-docker
-# Dockerfile for Cyber-LLM Research Platform on Hugging Face Spaces
-
-FROM python:3.9-slim
-
-# Create user for security
-RUN useradd -m -u 1000 user
-USER user
-
-# Set environment variables
-ENV PATH="/home/user/.local/bin:$PATH"
-ENV PYTHONPATH="/app"
+# Production Dockerfile for Advanced Cybersecurity AI Platform
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements file
-COPY --chown=user ./requirements-hf-space.txt requirements.txt
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    wget \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone the repository (HuggingFace Spaces will automatically use the committed files)
+COPY . /app
 
 # Install Python dependencies
-RUN pip install --no-cache-dir --upgrade -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application files
-COPY --chown=user . /app
+# Create necessary directories
+RUN mkdir -p /app/data /app/logs /app/temp
 
-# Expose port 7860 (Hugging Face Spaces standard)
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV HF_HOME=/app/.huggingface
+
+# Expose the port that the app runs on
 EXPOSE 7860
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:7860/health || exit 1
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:7860/health || exit 1
 
-# Start the FastAPI application
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]
+# Run the application
+CMD ["python", "app.py"]
