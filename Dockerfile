@@ -1,18 +1,15 @@
-# Production Dockerfile for Advanced Cybersecurity AI Platform
+# HuggingFace Spaces Dockerfile for Cybersecurity AI Platform
 FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install only essential system dependencies
 RUN apt-get update && apt-get install -y \
-    git \
     curl \
-    wget \
-    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone the repository (HuggingFace Spaces will automatically use the committed files)
+# Copy application files
 COPY . /app
 
 # Install Python dependencies
@@ -22,12 +19,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Create necessary directories
 RUN mkdir -p /app/data /app/logs /app/temp
 
-# Set environment variables
+# Set environment variables for HuggingFace Spaces
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
-ENV HF_HOME=/app/.huggingface
+ENV PORT=7860
 
-# Expose the port that the app runs on
+# Expose the HuggingFace Spaces port
 EXPOSE 7860
 
 # Health check
