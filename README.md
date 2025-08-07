@@ -1,88 +1,92 @@
----
-title: Cyber-LLM Research Platform
-emoji: 🛡️
-colorFrom: green
-colorTo: blue
-sdk: docker
-pinned: false
-license: mit
-short_description: Cybersecurity AI Research Platform with HF Models
----
+# 🛡️ Cyber-LLM: Advanced Cybersecurity AI Research Platform
 
-# 🛡️ Cyber-LLM Research Platform
+**⚡ Live Demo:** [https://huggingface.co/spaces/unit731/cyber_llm](https://huggingface.co/spaces/unit731/cyber_llm)
 
-Advanced Cybersecurity AI Research Environment for threat analysis, vulnerability detection, and security intelligence using Hugging Face models.
+## 🎯 Vision
+Cyber-LLM empowers security professionals by synthesizing advanced adversarial tradecraft, OPSEC-aware reasoning, and automated attack-chain orchestration. From initial reconnaissance through post-exploitation and exfiltration, Cyber-LLM acts as a strategic partner in red-team simulations and adversarial research.
 
-## 🚀 Features
+## 🚀 Key Innovations
+1. **Adversarial Fine-Tuning**: Self-play loops generate adversarial prompts to harden model robustness.   
+2. **Explainability & Safety Agents**: Modules providing rationales for each decision and checking for OPSEC breaches.  
+3. **Data Versioning & MLOps**: Integrated DVC, MLflow, and Weights & Biases for reproducible pipelines.  
+4. **Dynamic Memory Bank**: Embedding-based persona memory for historical APT tactics retrieval.  
+5. **Hybrid Reasoning**: Combines neural LLM with symbolic rule-engine for exploit chain logic.
 
-- **Advanced Threat Analysis**: Multi-model AI analysis for cybersecurity threats
-- **Code Vulnerability Detection**: Automated security code review and analysis  
-- **Multi-Agent Research**: Distributed cybersecurity AI agent coordination
-- **Real-time Processing**: Live threat intelligence and incident response
-- **Interactive Dashboard**: Web-based research interface for security professionals
+## 🏗️ Detailed Architecture
+- **Base Model**: Choice of LLaMA-3 / Phi-3 trunk with 7B–33B parameters.  
+- **LoRA Adapters**: Specialized modules for Recon, C2, Post-Exploit, Explainability, Safety.  
+- **Memory Store**: Vector DB (e.g., FAISS or Milvus) for persona & case retrieval.  
+- **Orchestrator**: LangChain + YAML-defined workflows under `src/orchestration/`.  
+- **MLOps Stack**: DVC-managed datasets, MLflow tracking, W&B dashboards, Grafana monitoring.
 
-## 🔧 API Endpoints
-
-- `GET /` - Main platform dashboard
-- `POST /analyze_threat` - Comprehensive threat analysis
-- `GET /models` - List available cybersecurity models
-- `GET /research` - Interactive research dashboard
-- `POST /analyze_file` - Security file analysis
-- `GET /health` - Platform health check
-
-## 🤖 Available Models
-
-- **microsoft/codebert-base** - Code analysis and vulnerability detection
-- **huggingface/CodeBERTa-small-v1** - Lightweight code understanding
-- **Custom Security Models** - Specialized cybersecurity AI models
-
-## 💻 Usage
-
-### Quick Threat Analysis
+## 💻 Usage Examples
 ```bash
-curl -X POST "https://unit731-cyber-llm.hf.space/analyze_threat" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "threat_data": "suspicious network activity detected on port 443",
-    "analysis_type": "comprehensive"
-  }'
+# Preprocess data
+dvc repro src/data/preprocess.py
+# Train adapters
+python src/training/train.py --module ReconOps
+# Run a red-team scenario
+python src/deployment/cli/cyber_cli.py orchestrate recon,target=10.0.0.5
 ```
 
-### Interactive Research
-Visit the `/research` endpoint for a web-based cybersecurity research dashboard.
+## 🚀 Packaging & Deployment
 
-## 🔬 Research Applications
+### ☁️ **Live Hugging Face Space**
+Experience the platform instantly at [unit731/cyber_llm](https://huggingface.co/spaces/unit731/cyber_llm)
+- 🌐 **Web Dashboard**: Interactive cybersecurity research interface
+- 📊 **Real-time Analysis**: Live threat analysis and monitoring  
+- 🔍 **API Access**: RESTful API for integration
+- 📚 **Documentation**: Complete API docs at `/docs`
 
-- **Threat Intelligence**: Advanced AI-powered threat analysis and classification
-- **Vulnerability Research**: Automated discovery and analysis of security vulnerabilities
-- **Incident Response**: AI-assisted cybersecurity incident investigation and response
-- **Security Code Review**: Automated security analysis of source code and configurations
-- **Penetration Testing**: AI-enhanced security testing and red team operations
+### 🐳 **Docker Deployment**
 
-## 🛠️ Development
+1. **Docker**: `docker-compose up --build` for offline labs.
+2. **Kubernetes**: `kubectl apply -f src/deployment/k8s/` for scalable clusters.
+3. **CLI**: `cyber-llm agent recon --target 10.0.0.5`
 
-This platform is built using:
-- **FastAPI** - High-performance web API framework
-- **Hugging Face Transformers** - State-of-the-art AI model integration
-- **Docker** - Containerized deployment for scalability
-- **Python 3.9** - Modern Python runtime environment
-
-## 🔐 Security Focus
-
-This research platform is designed specifically for cybersecurity applications:
-
-- **Ethical Research**: All capabilities designed for defensive security research
-- **Professional Use**: Intended for security professionals and researchers
-- **Educational Purpose**: Advancing cybersecurity through AI research
-- **Open Source**: Transparent and community-driven development
-
-## 🌐 Links
-
-- **GitHub Repository**: [734ai/cyber-llm](https://github.com/734ai/cyber-llm)
-- **Hugging Face Space**: [unit731/cyber_llm](https://huggingface.co/spaces/unit731/cyber_llm)
-- **Documentation**: Available at `/docs` endpoint
-- **Research Dashboard**: Available at `/research` endpoint
+## 👨‍💻 Author: Muzan Sano 
+## 📧 Contact: sanosensei36@gmail.com / research.unit734@proton.me
 
 ---
 
-**🔬 Advancing Cybersecurity Through AI Research**
+## 🌟 **PROJECT STATUS & CAPABILITIES**
+
+### ✅ **Currently Implemented**
+- 🚀 **Live Hugging Face Space** with interactive web interface
+- 🛡️ **Advanced Threat Analysis** using AI models  
+- 🤖 **Multi-Agent Architecture** for distributed security operations
+- 🧠 **Cognitive AI Systems** with memory and learning capabilities
+- 📊 **Real-time Monitoring** and alerting systems
+- 🔍 **Code Vulnerability Detection** and security analysis
+- 🐳 **Enterprise Docker Deployment** with Kubernetes support
+- 🔐 **Zero Trust Security Architecture** and RBAC
+- 📈 **MLOps Pipeline** with DVC, MLflow, and monitoring
+
+### 🎯 **Key Features Available**
+- **Interactive Web Dashboard**: Research interface at `/research` endpoint
+- **RESTful API**: Complete API at `/docs` with real-time threat analysis
+- **File Analysis**: Upload and analyze security files for vulnerabilities  
+- **Multi-Model Support**: Integration with Hugging Face transformer models
+- **Real-time Processing**: WebSocket support for live monitoring
+- **Enterprise Architecture**: Scalable, production-ready deployment
+
+### 🚀 **Try It Now**
+```bash
+# Quick API test
+curl -X POST "https://unit731-cyber-llm.hf.space/analyze_threat" \
+  -H "Content-Type: application/json" \
+  -d '{"threat_data": "suspicious network activity on port 443"}'
+
+# Or visit the interactive dashboard
+# https://unit731-cyber-llm.hf.space/research
+```
+
+### 🔧 **Local Development**
+```bash
+git clone https://github.com/734ai/cyber-llm.git
+cd cyber-llm
+cp .env.template .env  # Configure your API keys
+docker-compose up -d   # Start full platform
+```
+
+**🌐 Experience Live Demo:** [https://huggingface.co/spaces/unit731/cyber_llm](https://huggingface.co/spaces/unit731/cyber_llm)
