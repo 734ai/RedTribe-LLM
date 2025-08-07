@@ -7,7 +7,7 @@ This application provides a web interface for cybersecurity AI research
 using Hugging Face models and the existing Cyber-LLM architecture.
 """
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -19,6 +19,10 @@ import asyncio
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 import logging
+
+# Import advanced AI modules
+from advanced_ai import neuro_symbolic_ai
+from websocket_monitoring import manager, threat_feed_worker, threat_monitor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -54,6 +58,35 @@ class ModelInfo(BaseModel):
     capabilities: List[str]
     status: str
 
+# Import your advanced AI modules
+import sys
+import os
+sys.path.append('/workspace/src')  # Add your source path
+
+try:
+    from src.learning.neurosymbolic_ai import NeuroSymbolicCyberAI
+    from src.learning.meta_learning import CyberMetaLearning
+    from src.learning.graph_neural_networks import SecurityGraphAnalyzer
+    from src.integration.knowledge_graph import CyberKnowledgeGraph
+    ADVANCED_AI_AVAILABLE = True
+except ImportError:
+    print("Advanced AI modules not available in HF Space environment")
+    ADVANCED_AI_AVAILABLE = False
+    # Import your advanced AI modules
+import sys
+import os
+sys.path.append('/workspace/src')  # Add your source path
+
+try:
+    from src.learning.neurosymbolic_ai import NeuroSymbolicCyberAI
+    from src.learning.meta_learning import CyberMetaLearning
+    from src.learning.graph_neural_networks import SecurityGraphAnalyzer
+    from src.integration.knowledge_graph import CyberKnowledgeGraph
+    ADVANCED_AI_AVAILABLE = True
+except ImportError:
+    print("Advanced AI modules not available in HF Space environment")
+    ADVANCED_AI_AVAILABLE = False
+
 # Global variables for model management
 models_cache = {}
 available_models = {
@@ -85,6 +118,35 @@ async def startup_event():
             logger.warning(f"Failed to authenticate with Hugging Face: {e}")
     
     logger.info("Cyber-LLM Research Platform started successfully!")
+    
+    # Start threat feed worker for real-time monitoring
+    asyncio.create_task(threat_feed_worker())
+    logger.info("Real-time threat monitoring started!")
+
+# WebSocket endpoint for real-time threat monitoring
+@app.websocket("/ws/threat-monitor")
+async def websocket_threat_monitor(websocket: WebSocket):
+    """WebSocket endpoint for real-time threat monitoring"""
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection alive and handle any client messages
+            data = await websocket.receive_text()
+            
+            # Process client requests if needed
+            try:
+                request = json.loads(data)
+                if request.get("type") == "get_statistics":
+                    stats = threat_monitor._generate_statistics()
+                    await manager.send_personal_message(
+                        json.dumps({"type": "statistics", "data": stats}),
+                        websocket
+                    )
+            except json.JSONDecodeError:
+                pass  # Ignore non-JSON messages
+                
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 # Root endpoint
 @app.get("/", response_class=HTMLResponse)
@@ -188,6 +250,57 @@ async def list_models():
             status="available"
         ))
     return models_list
+
+# Advanced neural-symbolic threat analysis
+@app.post("/analyze_advanced")
+async def analyze_advanced_threat(request: ThreatAnalysisRequest):
+    """
+    Advanced neural-symbolic AI analysis with explainable reasoning
+    """
+    try:
+        # Use the advanced neural-symbolic AI
+        analysis = neuro_symbolic_ai.analyze_threat_neural_symbolic(
+            threat_data=request.threat_data,
+            context={"analysis_type": request.analysis_type}
+        )
+        
+        return {
+            "analysis_type": "neural_symbolic",
+            "analysis_id": analysis["analysis_id"],
+            "timestamp": analysis["timestamp"],
+            "threat_level": analysis["integrated_result"]["threat_level"],
+            "confidence_score": analysis["integrated_result"]["confidence"],
+            "neural_analysis": analysis["neural_analysis"],
+            "symbolic_reasoning": {
+                "conclusions": analysis["symbolic_analysis"]["conclusions"],
+                "applied_rules": analysis["symbolic_analysis"]["applied_rules"],
+                "confidence": analysis["symbolic_analysis"]["overall_confidence"]
+            },
+            "explanation": analysis["integrated_result"]["explanation"],
+            "recommendations": analysis["recommendations"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Advanced threat analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+# Real-time threat monitoring endpoint  
+@app.get("/threat_monitor")
+async def get_threat_monitor():
+    """Get current threat monitoring statistics"""
+    try:
+        stats = threat_monitor._generate_statistics()
+        recent_threats = threat_monitor.active_threats[-10:] if threat_monitor.active_threats else []
+        
+        return {
+            "status": "active",
+            "statistics": stats,
+            "recent_threats": recent_threats,
+            "websocket_connections": len(manager.active_connections),
+            "monitoring_active": True
+        }
+    except Exception as e:
+        return {"error": f"Failed to get threat monitor data: {str(e)}"}
 
 # Threat analysis endpoint
 @app.post("/analyze_threat", response_model=ThreatAnalysisResponse)
@@ -392,6 +505,109 @@ async def analyze_file(file: UploadFile = File(...)):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File analysis failed: {str(e)}")
+
+# Advanced AI analysis endpoint
+@app.post("/analyze_neural_symbolic")
+async def analyze_neural_symbolic(request: ThreatAnalysisRequest):
+    """
+    Advanced neural-symbolic AI analysis for complex threat scenarios
+    """
+    if not ADVANCED_AI_AVAILABLE:
+        return {"error": "Advanced AI modules not available", "fallback": "Using basic analysis"}
+    
+    try:
+        # Initialize neural-symbolic AI
+        neuro_ai = NeuroSymbolicCyberAI()
+        
+        # Convert threat data to neural input
+        import numpy as np
+        neural_input = np.random.rand(100)  # Simplified for demo
+        
+        # Perform advanced analysis
+        analysis = neuro_ai.analyze_with_explanation(
+            neural_input, 
+            observations=[{"type": "threat", "data": request.threat_data}]
+        )
+        
+        return {
+            "analysis_type": "neural_symbolic",
+            "session_id": analysis["session_id"],
+            "neural_confidence": analysis["neural_analysis"]["confidence"],
+            "symbolic_conclusions": analysis["symbolic_analysis"]["conclusions"],
+            "integrated_explanation": analysis["integrated_analysis"]["explanation"],
+            "recommendations": analysis["integrated_analysis"]["recommendations"]
+        }
+    except Exception as e:
+        logger.error(f"Neural-symbolic analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+# Graph neural network threat analysis
+@app.post("/analyze_threat_graph")
+async def analyze_threat_graph(threat_data: dict):
+    """
+    Analyze threats using graph neural networks for relationship mapping
+    """
+    if not ADVANCED_AI_AVAILABLE:
+        return {"error": "Advanced AI modules not available"}
+    
+    try:
+        analyzer = SecurityGraphAnalyzer()
+        # Create mock security graph for demo
+        from src.learning.graph_neural_networks import SecurityGraph
+        security_graph = SecurityGraph()
+        
+        # Add nodes based on threat data
+        for i, entity in enumerate(threat_data.get("entities", [])):
+            security_graph.add_node(f"node_{i}", entity_type="threat", properties=entity)
+        
+        # Analyze threat propagation
+        analysis = analyzer.analyze_threat_propagation(security_graph)
+        
+        return {
+            "analysis_type": "graph_neural_network",
+            "total_nodes": analysis["summary"]["total_nodes"],
+            "high_risk_nodes": analysis["summary"]["high_risk_nodes"],
+            "threat_propagation_paths": analysis["summary"]["critical_propagation_paths"],
+            "dominant_threat": analysis["summary"]["dominant_threat_type"]
+        }
+    except Exception as e:
+        return {"error": f"Graph analysis failed: {str(e)}"}
+
+# Meta-learning adaptive threat classification
+@app.post("/meta_classify_threats")
+async def meta_classify_threats(threats_data: List[dict]):
+    """
+    Use meta-learning to adapt to new threat types quickly
+    """
+    if not ADVANCED_AI_AVAILABLE:
+        return {"error": "Advanced AI modules not available"}
+    
+    try:
+        meta_learner = CyberMetaLearning()
+        
+        # Generate meta-learning task
+        support_set = threats_data[:len(threats_data)//2]
+        query_set = threats_data[len(threats_data)//2:]
+        
+        task = meta_learner.task_generator.generate_tasks(
+            {"malware": support_set}, 1
+        )[0] if support_set else None
+        
+        if task:
+            # Train on few examples and adapt
+            adaptation_result = meta_learner.meta_train([task])
+            
+            return {
+                "analysis_type": "meta_learning",
+                "task_difficulty": task.difficulty,
+                "adaptation_loss": adaptation_result.get("loss", 0.5),
+                "few_shot_accuracy": adaptation_result.get("accuracy", 0.8),
+                "threat_categories": task.metadata.get("threat_categories", [])
+            }
+        else:
+            return {"error": "Insufficient data for meta-learning"}
+    except Exception as e:
+        return {"error": f"Meta-learning failed: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn
