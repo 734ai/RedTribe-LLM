@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber-LLM // DefenseOS</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    
+    <!-- Local Styles -->
+    <link rel="stylesheet" href="/static/css/defense_os.css">
+</head>
+<body>
+    <div class="scan-overlay"></div>
+    
+    <div class="grid-container">
+        <!-- HEADER -->
+        <header class="header">
+            <div class="logo">Cyber-LLM <span style="color:var(--text-secondary)">//</span> DefenseOS</div>
+            <div class="status-bar">
+                <div class="status-item">SYSTEM: <span id="connection-status">INITIALIZING</span></div>
+                <div class="status-item">TIME: <span id="system-clock">--:--:--</span></div>
+            </div>
+        </header>
+
+        <!-- LEFT SIDEBAR: AGENT STATUS -->
+        <aside class="sidebar-left panel">
+            <div class="panel-header">
+                Active Agents
+                <div class="status-led green"></div>
+            </div>
+            <div class="panel-content">
+                <div class="metric-card">
+                    <div class="metric-label">Orchestrator</div>
+                    <div class="metric-value" id="metric-orchestrator">ONLINE</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Reconnaissance</div>
+                    <div class="metric-value" id="metric-recon">IDLE</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">C2 Infrastructure</div>
+                    <div class="metric-value" id="metric-c2">STANDBY</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Cognitive Engine</div>
+                    <div class="metric-value" id="metric-cognitive">ACTIVE</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- CENTER: MAIN VISUALIZATION -->
+        <main class="main-view panel">
+            <div class="panel-header">Tactical Map // Global Threat Overlay</div>
+            <div class="panel-content" style="display:flex; justify-content:center; align-items:center;">
+                <!-- Placeholder for map/visualization -->
+                <div style="text-align:center; color: var(--text-secondary); font-family: var(--font-mono);">
+                    <div style="font-size: 3rem; margin-bottom: 20px; opacity: 0.5;">Waiting for Target...</div>
+                    <div>Awaiting Uplink Data</div>
+                </div>
+            </div>
+        </main>
+
+        <!-- RIGHT SIDEBAR: INTEL FEED -->
+        <aside class="sidebar-right panel">
+            <div class="panel-header">Intelligence Feed</div>
+            <div class="panel-content" id="intel-feed">
+                <!-- Dynamically populated -->
+                <div class="log-entry"><span class="log-time">[SYSTEM]</span> Looking for indicators...</div>
+            </div>
+        </aside>
+
+        <!-- BOTTOM: CONSOLE -->
+        <footer class="console panel">
+            <div class="panel-header">Command Interface</div>
+            <div class="panel-content" id="system-logs">
+                <!-- System logs go here -->
+            </div>
+            <div style="padding: 10px; border-top: 1px solid var(--border-color); display:flex; gap:10px;">
+                <input type="text" id="command-input" class="input-field" placeholder="Enter command or target (e.g. 'analyze 192.168.1.1' or 'run workflow alpha')">
+                <button id="execute-btn" class="btn">EXECUTE</button>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/js/mission_control.js"></script>
+</body>
+</html>

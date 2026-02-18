@@ -29,9 +29,10 @@ from agents.explainability_agent import ExplainabilityAgent
 from ..agents.orchestrator import Orchestrator
 
 # Import our persistent systems
-from cognitive.persistent_reasoning_system import (
+from src.cognitive.persistent_reasoning_system import (
     PersistentCognitiveSystem, MemoryEntry, MemoryType, 
-    ReasoningType, StrategicPlan, ReasoningChain
+    ReasoningType, StrategicPlan, ReasoningChain,
+    create_persistent_cognitive_system
 )
 from server.persistent_agent_server import PersistentAgentServer, create_server_config
 

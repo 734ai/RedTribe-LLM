@@ -401,8 +401,14 @@ class GenkitEnhancedOrchestrator:
         """Initialize integration with existing cognitive system"""
         try:
             # Initialize existing cognitive system
-            self.cognitive_system = AdvancedCognitiveSystem()
-            await self.cognitive_system.initialize()
+            from src.cognitive.persistent_reasoning_system import (
+    PersistentCognitiveSystem,
+    create_persistent_cognitive_system,
+    ReasoningType,
+    MemoryType,
+    ReasoningChain
+)
+            self.cognitive_system = PersistentCognitiveSystem()
             
             # Initialize legacy orchestrator for tool integration
             self.legacy_orchestrator = SecurityOrchestrator()

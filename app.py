@@ -1,293 +1,60 @@
-"""
-Cyber-LLM: Advanced Cybersecurity AI Operations Center
-Clean minimal version for HuggingFace Spaces deployment
-"""
-
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel
-from typing import Dict, List, Any
 import os
+import logging
+from fastapi import FastAPI, WebSocket, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from src.server.persistent_agent_server import PersistentAgentServer, ServerConfiguration
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("cyber_llm")
+
 import json
-from datetime import datetime
 
-# Create FastAPI app
-app = FastAPI(
-    title="Cyber-LLM Operations Center",
-    description="Advanced Cybersecurity AI Platform",
-    version="2.0.0"
+# ... (logging setup remains)
+
+# Initialize persistent server
+config = ServerConfiguration(
+    port=7860,
+    distributed_mode=False
 )
+agent_server = PersistentAgentServer(config)
 
-# Data Models
-class TargetAnalysisRequest(BaseModel):
-    target: str
-    analysis_type: str = "comprehensive"
+# Get the FastAPI app from the agent server
+app = FastAPI(title="Cyber-LLM DefenseOS")
 
-class ThreatResponse(BaseModel):
-    threat_level: str
-    confidence: float
-    analysis: Dict[str, Any]
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
-# Threat Intelligence Database
-THREAT_INTELLIGENCE = {
-    "apt_groups": {
-        "APT29": {"name": "Cozy Bear", "origin": "Russia", "active": True},
-        "APT28": {"name": "Fancy Bear", "origin": "Russia", "active": True},
-        "Lazarus": {"name": "Hidden Cobra", "origin": "North Korea", "active": True}
-    },
-    "iocs": ["malicious-domain.com", "suspicious-email@attacker.org", "192.168.1.100"]
-}
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Starting Cyber-LLM DefenseOS...")
+    await agent_server.start_background_only()
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard():
-    """Main cybersecurity operations dashboard"""
-    
-    apt_count = len(THREAT_INTELLIGENCE['apt_groups'])
-    ioc_count = len(THREAT_INTELLIGENCE['iocs'])
-    
-    html_content = """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>🛡️ Cyber-LLM Operations Center</title>
-        <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-                font-family: 'Courier New', monospace; 
-                background: linear-gradient(135deg, #0a0a0a, #1a1a2e);
-                color: #00ff00; 
-                min-height: 100vh;
-                padding: 20px;
-            }
-            .container { 
-                max-width: 1200px; 
-                margin: 0 auto; 
-                background: rgba(0, 0, 0, 0.8);
-                border: 2px solid #00ff00;
-                border-radius: 15px;
-                padding: 30px;
-            }
-            h1 { 
-                color: #ff0040; 
-                text-align: center; 
-                margin-bottom: 30px; 
-                font-size: 2.5em;
-                text-shadow: 0 0 10px #ff0040;
-            }
-            .stats-grid { 
-                display: grid; 
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
-                gap: 20px; 
-                margin-bottom: 30px; 
-            }
-            .stat-card { 
-                background: rgba(0, 255, 0, 0.1); 
-                border: 1px solid #00ff00; 
-                border-radius: 10px; 
-                padding: 20px; 
-                text-align: center;
-            }
-            .stat-value { color: #00ffff; font-size: 2em; font-weight: bold; }
-            .section { 
-                background: rgba(255, 0, 64, 0.1); 
-                border: 1px solid #ff0040; 
-                border-radius: 10px; 
-                padding: 20px; 
-                margin: 20px 0; 
-            }
-            .section h2 { color: #ff0040; margin-bottom: 15px; }
-            .threat-list { list-style: none; }
-            .threat-list li { 
-                background: rgba(0, 255, 255, 0.1); 
-                margin: 5px 0; 
-                padding: 10px; 
-                border-radius: 5px; 
-                border-left: 3px solid #00ffff;
-            }
-            .input-group { margin: 10px 0; }
-            .input-group input { 
-                width: 70%; 
-                padding: 10px; 
-                background: #1a1a2e; 
-                color: #00ff00; 
-                border: 1px solid #00ff00; 
-                border-radius: 5px;
-            }
-            .btn { 
-                background: #ff0040; 
-                color: white; 
-                border: none; 
-                padding: 10px 20px; 
-                border-radius: 5px; 
-                cursor: pointer; 
-                font-family: 'Courier New', monospace;
-            }
-            .btn:hover { background: #cc0033; }
-            .result-box { 
-                background: rgba(0, 0, 0, 0.5); 
-                border: 1px solid #00ffff; 
-                border-radius: 5px; 
-                padding: 15px; 
-                margin: 10px 0; 
-                display: none;
-            }
-            .status-online { color: #00ff00; }
-            .status-warning { color: #ffff00; }
-            .status-critical { color: #ff0040; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🛡️ CYBER-LLM OPERATIONS CENTER</h1>
-            
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value">""" + str(apt_count) + """</div>
-                    <div>APT Groups Tracked</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">""" + str(ioc_count) + """</div>
-                    <div>IOCs Monitored</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value status-online">ONLINE</div>
-                    <div>System Status</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">97.3%</div>
-                    <div>Detection Rate</div>
-                </div>
-            </div>
+async def read_root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
-            <div class="section">
-                <h2>🎯 TARGET ANALYSIS</h2>
-                <div class="input-group">
-                    <input type="text" id="targetInput" placeholder="Enter IP, domain, hash, or IOC..." />
-                    <button class="btn" onclick="analyzeTarget()">🔍 ANALYZE</button>
-                </div>
-                <div id="analysisResult" class="result-box"></div>
-            </div>
-
-            <div class="section">
-                <h2>🏴‍☠️ ACTIVE APT GROUPS</h2>
-                <ul class="threat-list">
-                    <li><strong>APT29 (Cozy Bear)</strong> - 🇷🇺 Russia | Active Threat Actor</li>
-                    <li><strong>APT28 (Fancy Bear)</strong> - 🇷🇺 Russia | Advanced Persistent Threat</li>
-                    <li><strong>Lazarus (Hidden Cobra)</strong> - 🇰🇵 North Korea | Financial Focus</li>
-                </ul>
-            </div>
-
-            <div class="section">
-                <h2>⚡ RECENT INTELLIGENCE</h2>
-                <ul class="threat-list">
-                    <li>🚨 New campaign targeting financial institutions detected</li>
-                    <li>🔍 Suspicious domain activity: malicious-banking.com</li>
-                    <li>⚠️ Zero-day vulnerability in web frameworks identified</li>
-                    <li>🛡️ Defensive countermeasures updated</li>
-                </ul>
-            </div>
-        </div>
-
-        <script>
-            async function analyzeTarget() {
-                const target = document.getElementById('targetInput').value;
-                if (!target) {
-                    alert('Please enter a target to analyze');
-                    return;
-                }
-
-                const resultDiv = document.getElementById('analysisResult');
-                resultDiv.innerHTML = '<div style="color: #ffff00;">🔄 Analyzing target...</div>';
-                resultDiv.style.display = 'block';
-
-                try {
-                    const response = await fetch('/analyze', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ target: target, analysis_type: 'comprehensive' })
-                    });
-
-                    const result = await response.json();
-                    
-                    resultDiv.innerHTML = `
-                        <h3 style="color: #00ffff;">🎯 Analysis Results</h3>
-                        <p><strong>Target:</strong> ${target}</p>
-                        <p><strong>Threat Level:</strong> <span class="status-${result.threat_level}">${result.threat_level.toUpperCase()}</span></p>
-                        <p><strong>Confidence:</strong> ${(result.confidence * 100).toFixed(1)}%</p>
-                        <p><strong>Type:</strong> ${result.analysis.type}</p>
-                        <p><strong>Description:</strong> ${result.analysis.description}</p>
-                        <p><strong>Recommendations:</strong> ${result.analysis.recommendations}</p>
-                    `;
-                } catch (error) {
-                    resultDiv.innerHTML = '<div style="color: #ff0040;">❌ Analysis failed: ' + error.message + '</div>';
-                }
-            }
-        </script>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
-
-@app.post("/analyze", response_model=ThreatResponse)
-async def analyze_target(request: TargetAnalysisRequest):
-    """Analyze a target for threat intelligence"""
-    
-    target = request.target.lower()
-    
-    # Default analysis
-    threat_level = "low"
-    confidence = 0.7
-    analysis = {
-        "target": request.target,
-        "type": "clean",
-        "description": "Target appears benign based on current intelligence",
-        "recommendations": "Continue monitoring for changes"
-    }
-    
-    # Check against known IOCs
-    if any(ioc in target for ioc in THREAT_INTELLIGENCE["iocs"]):
-        threat_level = "critical"
-        confidence = 0.95
-        analysis.update({
-            "type": "known_malicious",
-            "description": "Target matches known IOC in threat intelligence database",
-            "recommendations": "BLOCK IMMEDIATELY - Known malicious indicator"
-        })
-    elif any(keyword in target for keyword in ["malicious", "evil", "hack", "attack", "phish"]):
-        threat_level = "warning"
-        confidence = 0.8
-        analysis.update({
-            "type": "suspicious",
-            "description": "Target contains suspicious keywords indicating potential threat",
-            "recommendations": "Investigate further and implement monitoring"
-        })
-    
-    return ThreatResponse(
-        threat_level=threat_level,
-        confidence=confidence,
-        analysis=analysis
-    )
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for monitoring"""
-    return {
-        "status": "healthy",
-        "service": "cyber-llm",
-        "version": "2.0.0",
-        "timestamp": datetime.now().isoformat(),
-        "threat_db_size": len(THREAT_INTELLIGENCE["apt_groups"])
-    }
-
-@app.get("/api/threats")
-async def get_threats():
-    """Get current threat intelligence data"""
-    return JSONResponse(content=THREAT_INTELLIGENCE)
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    agent_server.websocket_connections.add(websocket)
+    try:
+        while True:
+            data_text = await websocket.receive_text()
+            try:
+                data = json.loads(data_text)
+                # Handle incoming commands via agent server logic
+                await agent_server._handle_websocket_message(websocket, data)
+            except json.JSONDecodeError:
+                logger.error("Invalid JSON received")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        agent_server.websocket_connections.discard(websocket)
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 7860))
-    print(f"🛡️ Starting Cyber-LLM Operations Center on port {port}")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=7860)

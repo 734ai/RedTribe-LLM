@@ -31,9 +31,9 @@ import socket
 from urllib.parse import urlparse
 
 # Import our cognitive system
-from cognitive.persistent_reasoning_system import (
+from src.cognitive.persistent_reasoning_system import (
     PersistentCognitiveSystem,
-    create_persistent_cognitive_system,
+    # create_persistent_cognitive_system, # This might not exist or be needed if we initialize directly
     ReasoningType,
     MemoryType,
     MemoryEntry
@@ -180,6 +180,13 @@ class PersistentAgentServer:
             self.logger.info("Shutdown signal received")
         finally:
             await self.shutdown()
+
+    async def start_background_only(self):
+        """Start only the background processes (for use with external HTTP server like FastAPI)"""
+        self.server_running = True
+        self._start_background_processes()
+        self.logger.info("Persistent Agent Server background processes started")
+
     
     def _setup_routes(self, app: web.Application):
         """Setup HTTP routes for the server"""
@@ -439,7 +446,87 @@ class PersistentAgentServer:
                 "status": "error",
                 "message": str(e)
             }, status=500)
+
+    async def get_agent_status(self, request):
+        """Get agent status"""
+        try:
+            agent_id = request.match_info['agent_id']
+            if agent_id not in self.agent_registry:
+                return web.json_response({"status": "error", "message": "Agent not found"}, status=404)
+            
+            session_id = self.agent_registry[agent_id]
+            session = self.active_sessions[session_id]
+            
+            return web.json_response({
+                "status": "success",
+                "agent_id": agent_id,
+                "session_id": session_id,
+                "agent_status": session.status,
+                "last_activity": session.last_activity.isoformat(),
+                "active_tasks_count": len(session.active_tasks),
+                "reasoning_chains_count": len(session.reasoning_chains),
+                "strategic_plans_count": len(session.strategic_plans)
+            })
+        except Exception as e:
+            self.logger.error(f"Error getting agent status: {e}")
+            return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+    async def list_sessions(self, request):
+        """List all active sessions"""
+        try:
+            sessions = []
+            for session in self.active_sessions.values():
+                sessions.append({
+                    "session_id": session.session_id,
+                    "agent_id": session.agent_id,
+                    "status": session.status,
+                    "start_time": session.start_time.isoformat(),
+                    "last_activity": session.last_activity.isoformat()
+                })
+            return web.json_response({"status": "success", "count": len(sessions), "sessions": sessions})
+        except Exception as e:
+            self.logger.error(f"Error listing sessions: {e}")
+            return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+    async def get_server_stats(self, request):
+        """Get server statistics"""
+        try:
+            stats = {
+                "active_sessions": len(self.active_sessions),
+                "task_queue_size": self.task_queue.qsize(),
+                "websocket_connections": len(self.websocket_connections),
+                "uptime": (datetime.now() - self.server_start_time).total_seconds() if hasattr(self, 'server_start_time') else 0,
+                "memory_system": await self._get_memory_stats()
+            }
+            return web.json_response({"status": "success", "stats": stats})
+        except Exception as e:
+            self.logger.error(f"Error getting server stats: {e}")
+            return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+    async def backup_memory(self, request):
+        """Trigger immediate memory backup"""
+        try:
+            await self._backup_memory_state()
+            return web.json_response({"status": "success", "message": "Memory backup completed"})
+        except Exception as e:
+            self.logger.error(f"Error backing up memory: {e}")
+            return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+    async def restore_memory(self, request):
+        """Restore memory from backup (Not Implemented)"""
+        return web.json_response({"status": "error", "message": "Not implemented"}, status=501)
+
     
+    async def _send_ws_message(self, ws, message: str):
+        """Send message to websocket compatible with aiohttp and FastAPI"""
+        try:
+            if hasattr(ws, 'send_str'):
+                await ws.send_str(message)
+            elif hasattr(ws, 'send_text'):
+                await ws.send_text(message)
+        except Exception as e:
+            self.logger.error(f"Error sending WS message: {e}")
+            
     async def websocket_handler(self, request):
         """WebSocket handler for real-time communication"""
         
@@ -475,7 +562,7 @@ class PersistentAgentServer:
                     "agent_id": agent_id,
                     "timestamp": datetime.now().isoformat()
                 }
-                await ws.send_str(json.dumps(response))
+                await self._send_ws_message(ws, json.dumps(response))
             
             elif message_type == 'agent_command':
                 agent_id = data.get('agent_id')
@@ -490,7 +577,7 @@ class PersistentAgentServer:
                     "result": result,
                     "timestamp": datetime.now().isoformat()
                 }
-                await ws.send_str(json.dumps(response))
+                await self._send_ws_message(ws, json.dumps(response))
             
         except Exception as e:
             error_response = {
@@ -498,7 +585,8 @@ class PersistentAgentServer:
                 "message": str(e),
                 "timestamp": datetime.now().isoformat()
             }
-            await ws.send_str(json.dumps(error_response))
+
+            await self._send_ws_message(ws, json.dumps(error_response))
     
     async def _process_agent_command(self, agent_id: str, command: Dict[str, Any]) -> Dict[str, Any]:
         """Process agent command via WebSocket"""
@@ -978,7 +1066,7 @@ class PersistentAgentServer:
         disconnected = []
         for ws in self.websocket_connections:
             try:
-                await ws.send_str(json.dumps(message))
+                await self._send_ws_message(ws, json.dumps(message))
             except Exception:
                 disconnected.append(ws)
         

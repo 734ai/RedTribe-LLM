@@ -19,7 +19,12 @@ from dataclasses import dataclass, field, asdict
 import yaml
 
 # Configuration imports
-from cognitive.persistent_reasoning_system import PersistentCognitiveSystem
+from src.cognitive.persistent_reasoning_system import (
+    PersistentCognitiveSystem,
+    create_persistent_cognitive_system,
+    ReasoningType,
+    MemoryType
+)
 from server.persistent_agent_server import PersistentAgentServer, create_server_config
 from integration.persistent_multi_agent_integration import (
     PersistentMultiAgentSystem, create_persistent_multi_agent_system
