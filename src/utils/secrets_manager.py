@@ -13,12 +13,32 @@ from pathlib import Path
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-import keyring
-import hvac  # HashiCorp Vault client
-import boto3
-from azure.keyvault.secrets import SecretClient
-from azure.identity import DefaultAzureCredential
-from google.cloud import secretmanager
+try:
+    import keyring
+except ImportError:
+    keyring = None
+
+try:
+    import hvac  # HashiCorp Vault client
+except ImportError:
+    hvac = None
+
+try:
+    import boto3
+except ImportError:
+    boto3 = None
+
+try:
+    from azure.keyvault.secrets import SecretClient
+    from azure.identity import DefaultAzureCredential
+except ImportError:
+    SecretClient = None
+    DefaultAzureCredential = None
+
+try:
+    from google.cloud import secretmanager
+except ImportError:
+    secretmanager = None
 import yaml
 import logging
 
@@ -190,6 +210,10 @@ class VaultProvider(SecretProvider):
         # Initialize Vault client
         self.client = hvac.Client(url=vault_url)
         
+        if not hvac:
+            self.logger.warning("hvac module not installed. Vault provider disabled.")
+            return
+
         # Authenticate
         token = vault_token or os.getenv("VAULT_TOKEN")
         if token:
@@ -249,8 +273,9 @@ class VaultProvider(SecretProvider):
             self.logger.audit("Secret accessed from Vault", secret_name=name)
             return value
         
-        except hvac.exceptions.InvalidPath:
-            raise SecretNotFoundError(name)
+        except Exception as e:
+            if hvac and isinstance(e, hvac.exceptions.InvalidPath):
+                raise SecretNotFoundError(name)
         except Exception as e:
             self.logger.error("Failed to get secret from Vault", 
                             secret_name=name, error=str(e))
@@ -310,6 +335,8 @@ class AWSSecretsProvider(SecretProvider):
                  logger: Optional[CyberLLMLogger] = None):
         
         super().__init__(logger)
+        if not boto3:
+            raise ImportError("boto3 module not installed")
         self.client = boto3.client('secretsmanager', region_name=region_name)
     
     async def get_secret(self, name: str) -> str:

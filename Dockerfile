@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Create necessary directories
-RUN mkdir -p /app/data /app/logs /app/temp
+RUN mkdir -p /app/data /app/logs /app/temp && chmod 777 /app/data /app/logs /app/temp
 
 # Set environment variables for HuggingFace Spaces
 ENV PYTHONPATH=/app

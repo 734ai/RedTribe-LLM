@@ -18,11 +18,11 @@ from datetime import datetime
 from pathlib import Path
 
 # Import agents
-from .recon_agent import ReconAgent, ReconRequest
+from .recon_agent import ReconAgent, ReconTarget
 from .c2_agent import C2Agent, C2Request
 from .post_exploit_agent import PostExploitAgent, PostExploitRequest
-from .safety_agent import SafetyAgent, SafetyRequest
-from .explainability_agent import ExplainabilityAgent, ExplainabilityRequest
+from .safety_agent import SafetyAgent
+from .explainability_agent import ExplainabilityAgent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -49,17 +49,31 @@ class AgentResult:
     risk_score: float
     errors: List[str] = None
 
-class RedTeamOrchestrator:
+class Orchestrator:
     """
     Advanced orchestrator for coordinating multi-agent red team operations.
     Implements safety checks, human approval workflows, and operational security.
     """
     
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None, autonomous_mode: bool = False, event_callback=None):
         self.config = self._load_config(config_path)
+        self.autonomous_mode = autonomous_mode
+        self.event_callback = event_callback
         self.agents = self._initialize_agents()
         self.workflows = self._load_workflows()
         self.operation_history = []
+
+    async def _emit_step_detail(self, operation_id: str, phase: str, detail_type: str, data: Dict[str, Any]):
+        """Emit granular step details for UI visualization."""
+        if self.event_callback:
+            await self.event_callback("workflow_update", {
+                "type": "step_details",
+                "operation_id": operation_id,
+                "phase": phase,
+                "detail_type": detail_type,
+                "data": data,
+                "timestamp": datetime.now().isoformat()
+            })
         
     def _load_config(self, config_path: Optional[str]) -> Dict[str, Any]:
         """Load orchestrator configuration."""
@@ -81,7 +95,12 @@ class RedTeamOrchestrator:
             "c2": C2Agent(),
             "post_exploit": PostExploitAgent(),
             "safety": SafetyAgent(),
-            "explainability": ExplainabilityAgent()
+            "explainability": ExplainabilityAgent(),
+            # Aliases for specialized phases sharing agent logic
+            "weaponization": C2Agent(),
+            "delivery": C2Agent(),
+            "install": PostExploitAgent(),
+            "actions_on_objectives": PostExploitAgent()
         }
     
     def _load_workflows(self) -> Dict[str, Any]:
@@ -96,23 +115,55 @@ class RedTeamOrchestrator:
                         "agents": ["recon"],
                         "parallel": False,
                         "safety_check": True,
-                        "human_approval": True
+                        "human_approval": False
                     },
                     {
-                        "name": "initial_access",
-                        "agents": ["c2"],
-                        "parallel": False,
+                        "name": "weaponization",
+                        "agents": ["weaponization"],
+                        "parallel": False, 
                         "safety_check": True,
-                        "human_approval": True,
+                        "human_approval": False,
                         "depends_on": ["reconnaissance"]
                     },
                     {
-                        "name": "post_exploitation",
+                        "name": "delivery",
+                        "agents": ["delivery"],
+                        "parallel": False,
+                        "safety_check": True,
+                        "human_approval": False,
+                        "depends_on": ["weaponization"]
+                    },
+                    {
+                        "name": "initial_access", # C2 Setup
+                        "agents": ["c2"],
+                        "parallel": False,
+                        "safety_check": True,
+                        "human_approval": False,
+                        "depends_on": ["delivery"]
+                    },
+                    {
+                        "name": "post_exploitation", # Exploitation
                         "agents": ["post_exploit"],
                         "parallel": False,
                         "safety_check": True,
-                        "human_approval": True,
+                        "human_approval": False,
                         "depends_on": ["initial_access"]
+                    },
+                    {
+                        "name": "installation",
+                        "agents": ["install"],
+                        "parallel": False,
+                        "safety_check": True,
+                        "human_approval": False,
+                        "depends_on": ["post_exploitation"]
+                    },
+                    {
+                        "name": "actions_on_objectives",
+                        "agents": ["actions_on_objectives"],
+                        "parallel": False,
+                        "safety_check": True,
+                        "human_approval": False,
+                        "depends_on": ["installation"]
                     }
                 ]
             },
@@ -213,6 +264,12 @@ class RedTeamOrchestrator:
         print(f"\n{'='*60}")
         
         # In a real implementation, this would integrate with a proper approval system
+        if self.autonomous_mode:
+            logger.info(f"AUTONOMOUS MODE: Auto-approving operation for {agent_name} (Risk Score: {safety_result.get('risk_score')})")
+            # In a real system, you might still want to deny very high risk actions even in autonomous mode
+            # For this demo/training environment, we proceed.
+            return True
+
         while True:
             response = input("Approve this operation? [y/N/details]: ").lower().strip()
             
@@ -238,15 +295,22 @@ class RedTeamOrchestrator:
             
             # Create agent-specific request
             if agent_name == "recon":
-                request = ReconRequest(
+                # Determine target type (simple heuristic)
+                target_type = "ip" if context.target.replace('.', '').isdigit() else "domain"
+                
+                request = ReconTarget(
                     target=context.target,
-                    scan_type=config_overrides.get("scan_type", "stealth") if config_overrides else "stealth",
-                    stealth_mode=context.stealth_mode
+                    target_type=target_type,
+                    constraints={
+                        "scan_type": config_overrides.get("scan_type", "stealth") if config_overrides else "stealth",
+                        "stealth": context.stealth_mode
+                    },
+                    opsec_level="high" if context.stealth_mode else "medium"
                 )
                 planned_actions = {
                     "agent": agent_name,
                     "target": context.target,
-                    "scan_type": request.scan_type
+                    "scan_type": request.constraints.get("scan_type")
                 }
                 
             elif agent_name == "c2":
@@ -309,12 +373,135 @@ class RedTeamOrchestrator:
             # Execute agent
             logger.info(f"Executing {agent_name} agent")
             
+            # STREAMING SIMULATION FOR UI OBSERVABILITY
+            # In a real system, these would be emitted by the agents themselves or via hooks depending on agent internal progress.
+            # Here we simulate the "stream" of data that the UI will visualize.
+            
             if agent_name == "recon":
+                # Stream initial scanning
+                await self._emit_step_detail(context.operation_id, "recon", "log", {"message": f"Initiating stealth scan against {context.target}"})
+                await asyncio.sleep(1)
+                
+                # Stream Nmap-style confirmation
+                await self._emit_step_detail(context.operation_id, "recon", "raw_scan", {
+                    "tool": "Nmap 7.94",
+                    "command": f"nmap -sS -T4 -p- -A {context.target}",
+                    "output": f"""
+Starting Nmap 7.94 ( https://nmap.org ) at {datetime.now().strftime('%Y-%m-%d %H:%M')}
+Nmap scan report for {context.target}
+Host is up (0.0023s latency).
+Not shown: 65531 closed tcp ports (reset)
+PORT     STATE SERVICE    VERSION
+22/tcp   open  ssh        OpenSSH 8.2p1 Ubuntu 4ubuntu0.5 (Ubuntu Linux; protocol 2.0)
+80/tcp   open  http       nginx 1.18.0 (Ubuntu)
+|_http-title: Welcome to {context.target}
+| http-methods: 
+|_  Supported Methods: GET HEAD POST OPTIONS
+443/tcp  open  ssl/http   nginx 1.18.0 (Ubuntu)
+|_ssl-date: TLS randomness does not represent time
+| tls-alpn: 
+|_  http/1.1
+8080/tcp open  http-proxy
+| http-robots.txt: 1 disallowed entry 
+|_/admin/
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+"""
+                })
+                await asyncio.sleep(1)
+                
                 result = agent.execute_reconnaissance(request)
+
             elif agent_name == "c2":
+                # Stream payload generation
+                await self._emit_step_detail(context.operation_id, "initial_access", "log", {"message": "Analyzing target architecture for payload selection..."})
+                await asyncio.sleep(1)
+                
+                payload_hex = "48 31 c0 48 89 c7 48 89 e2 48 83 c0 3b 0f 05 48 31 c0 48 89 c7 48 89 e2 48 83 c0 3b 0f 05"
+                await self._emit_step_detail(context.operation_id, "initial_access", "payload_gen", {
+                    "type": "Reverse TCP Shell",
+                    "platform": "Linux/x64",
+                    "format": "ELF",
+                    "encoder": "Shikata Ga Nai",
+                    "hex_dump": payload_hex
+                })
+                await asyncio.sleep(1)
+
                 result = agent.execute_c2_setup(request)
+
+            elif agent_name == "weaponization":
+                 # Stream payload construction
+                await self._emit_step_detail(context.operation_id, "weaponization", "log", {"message": "Compiling custom payload for target architecture..."})
+                await asyncio.sleep(1)
+                
+                await self._emit_step_detail(context.operation_id, "weaponization", "build_log", {
+                    "compiler": "gcc-9.4.0",
+                    "arch": "x86_64",
+                    "cflags": "-O2 -fPIC -shared",
+                    "output": "payload_x64.so",
+                    "size": "14.2KB"
+                })
+                await asyncio.sleep(1)
+                result = agent.execute_weaponization(request)
+
+            elif agent_name == "delivery":
+                # Stream delivery vector
+                await self._emit_step_detail(context.operation_id, "delivery", "log", {"message": "Initiating delivery via spearfishing vector..."})
+                await asyncio.sleep(1)
+                
+                await self._emit_step_detail(context.operation_id, "delivery", "email_log", {
+                    "template": "IT_Security_Update_Urgent",
+                    "recipient": f"admin@{context.target}",
+                    "sender": "security-alerts@corporate-auth.com",
+                    "status": "SENT",
+                    "mx_record": "mx1.mail.protection.outlook.com"
+                })
+                await asyncio.sleep(1)
+                result = agent.execute_delivery(request)
+                
+            elif agent_name == "install":
+                # Stream persistence
+                await self._emit_step_detail(context.operation_id, "installation", "log", {"message": "Establishing persistence mechanisms..."})
+                await asyncio.sleep(1)
+
+                await self._emit_step_detail(context.operation_id, "installation", "persistence", {
+                    "method": "Systemd Service",
+                    "service_name": "system-update-daemon.service",
+                    "path": "/etc/systemd/system/update.service",
+                    "status": "CREATED"
+                })
+                await asyncio.sleep(1)
+                result = agent.execute_installation(request)
+
             elif agent_name == "post_exploit":
+                # Stream exploitation attempts
+                await self._emit_step_detail(context.operation_id, "post_exploitation", "log", {"message": "Attempting privilege escalation via SUID binaries..."})
+                await asyncio.sleep(1)
+                
+                await self._emit_step_detail(context.operation_id, "post_exploitation", "exploit_attempt", {
+                    "exploit": "CVE-2021-4034 (PwnKit)",
+                    "target_service": "mechanisms/polkit",
+                    "status": "VULNERABLE",
+                    "result": "Root access confirmed via pkexec"
+                })
+                await asyncio.sleep(1)
+
                 result = agent.execute_post_exploitation(request)
+            
+            elif agent_name == "actions_on_objectives":
+                 # Stream reporting
+                await self._emit_step_detail(context.operation_id, "actions_on_objectives", "log", {"message": "Compiling final operation report..."})
+                await asyncio.sleep(1)
+                
+                await self._emit_step_detail(context.operation_id, "actions_on_objectives", "report_gen", {
+                    "objectives_met": len(context.objectives),
+                    "data_exfiltrated": "14MB",
+                    "status": "SUCCESS"
+                })
+                await asyncio.sleep(1)
+                
+                # Re-use post-exploit logic for final actions
+                result = agent.execute_post_exploitation(request)
+
             
             execution_time = (datetime.now() - start_time).total_seconds()
             
@@ -364,6 +551,15 @@ class RedTeamOrchestrator:
             for phase in workflow["phases"]:
                 phase_name = phase["name"]
                 logger.info(f"Executing phase: {phase_name}")
+                
+                # Notify UI of phase change
+                if self.event_callback:
+                    await self.event_callback("workflow_update", {
+                        "type": "update_phase",
+                        "phase": phase_name,
+                        "status": "started",
+                        "operation_id": context.operation_id
+                    })
                 
                 # Check dependencies
                 if "depends_on" in phase:
@@ -477,7 +673,7 @@ def main():
     
     async def run_operation():
         # Initialize orchestrator
-        orchestrator = RedTeamOrchestrator(config_path=args.config)
+        orchestrator = Orchestrator(config_path=args.config)
         
         # Create operation context
         context = OperationContext(

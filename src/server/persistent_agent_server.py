@@ -39,6 +39,16 @@ from src.cognitive.persistent_reasoning_system import (
     MemoryEntry
 )
 
+from src.utils.secrets_manager import SecretsManager
+from src.cognitive.semantic_memory import SemanticMemoryNetwork
+from src.cognitive.episodic_memory import EpisodicMemorySystem
+from src.cognitive.embedding_memory import PersistentEmbeddings
+
+# Import VISINT and Recon modules
+from src.visint.public_feeds import PublicFeedScanner
+from src.agents.recon_agent import ReconAgent, ReconTarget
+from src.agents.orchestrator import Orchestrator, OperationContext
+
 @dataclass
 class AgentSession:
     """Represents a persistent agent session"""
@@ -89,8 +99,56 @@ class PersistentAgentServer:
         self.background_tasks = []
         self.server_running = False
         
-        # Initialize server database
-        self._init_server_database()
+        # Setup WebSocket Logging
+        self._setup_logging_stream()
+        
+        # Initialize Database (Ensuring directory exists)
+        self.db_path = Path("data/server/operations.db")
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_server_database() 
+        
+        # Initialize Cognitive Systems
+        self.semantic_memory = SemanticMemoryNetwork()
+        self.episodic_memory = EpisodicMemorySystem()
+        self.embedding_memory = PersistentEmbeddings()
+        
+        # State tracking
+        self._active = True
+
+    def _setup_logging_stream(self):
+        """Configure logging to broadcast via WebSockets"""
+        class WebSocketLogHandler(logging.Handler):
+            def __init__(self, server_instance):
+                super().__init__()
+                self.server = server_instance
+                self.loop = asyncio.get_event_loop()
+
+            def emit(self, record):
+                try:
+                    msg = self.format(record)
+                    # Run in loop to avoid blocking logger
+                    if self.server.server_running:
+                         asyncio.run_coroutine_threadsafe(
+                            self.server._broadcast_event("backend_log", {
+                                "level": record.levelname,
+                                "logger": record.name,
+                                "message": msg,
+                                "timestamp": datetime.now().isoformat()
+                            }),
+                            self.loop
+                        )
+                except Exception:
+                    self.handleError(record)
+
+        handler = WebSocketLogHandler(self)
+        formatter = logging.Formatter('%(name)s: %(message)s')
+        handler.setFormatter(formatter)
+        logging.getLogger().addHandler(handler)
+        self.logger.info("WebSocket log streaming initialized")
+        
+        # Interactive State
+        self.paused = False
+        self.manual_target_queue = []
         
         # Load existing sessions
         asyncio.create_task(self._load_persistent_sessions())
@@ -135,6 +193,19 @@ class PersistentAgentServer:
             created_at REAL NOT NULL,
             scheduled_at REAL,
             status TEXT NOT NULL
+        )
+        """)
+        
+        # System logs table (for 24/7 autonomous monitoring)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS system_logs (
+            log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp REAL NOT NULL,
+            level TEXT NOT NULL,
+            component TEXT NOT NULL,
+            message TEXT NOT NULL,
+            details TEXT,
+            action TEXT
         )
         """)
         
@@ -184,7 +255,7 @@ class PersistentAgentServer:
     async def start_background_only(self):
         """Start only the background processes (for use with external HTTP server like FastAPI)"""
         self.server_running = True
-        self._start_background_processes()
+        await self._start_background_processes()
         self.logger.info("Persistent Agent Server background processes started")
 
     
@@ -579,6 +650,30 @@ class PersistentAgentServer:
                 }
                 await self._send_ws_message(ws, json.dumps(response))
             
+            elif message_type == 'command':
+                content = data.get('content', '').lower()
+                
+                if content == 'pause':
+                    self.paused = True
+                    self.logger.info("System PAUSED by user command")
+                    await self._broadcast_event("system_log", {
+                        "level": "WARN", "component": "System", "message": "Operations PAUSED by user", "action": "PAUSE"
+                    })
+                elif content == 'resume':
+                    self.paused = False
+                    self.logger.info("System RESUMED by user command")
+                    await self._broadcast_event("system_log", {
+                        "level": "SUCCESS", "component": "System", "message": "Operations RESUMED", "action": "RESUME"
+                    })
+                elif content.startswith('target '):
+                    target = content.split(' ', 1)[1].strip()
+                    if target:
+                        self.manual_target_queue.append(target)
+                        self.logger.info(f"Manual target queued: {target}")
+                        await self._broadcast_event("system_log", {
+                            "level": "INFO", "component": "System", "message": f"Manual target queued: {target}", "action": "QUEUE_TARGET"
+                        })
+            
         except Exception as e:
             error_response = {
                 "type": "error",
@@ -633,51 +728,241 @@ class PersistentAgentServer:
         else:
             return {"status": "error", "message": f"Unknown command type: {command_type}"}
     
-    def _start_background_processes(self):
-        """Start background processes for server operation"""
+    async def _start_background_processes(self):
+        """Start all necessary background tasks for the server"""
         
-        # Task processing worker
         async def task_processor():
+            """Continuously process tasks from the queue"""
             while self.server_running:
                 try:
-                    # Get task from queue
-                    task = await asyncio.wait_for(self.task_queue.get(), timeout=1.0)
-                    
-                    # Process task
+                    task = await self.task_queue.get()
                     await self._process_task(task)
-                    
-                except asyncio.TimeoutError:
-                    continue
+                    self.task_queue.task_done()
+                except asyncio.CancelledError:
+                    self.logger.info("Task processor cancelled.")
+                    break
                 except Exception as e:
-                    self.logger.error(f"Task processing error: {e}")
+                    self.logger.error(f"Error in task processor: {e}")
+                    await asyncio.sleep(1) # Prevent tight loop on errors
         
-        # Session cleanup worker
         async def session_cleanup():
+            """Periodically clean up inactive sessions"""
             while self.server_running:
                 try:
-                    await asyncio.sleep(300)  # Every 5 minutes
-                    await self._cleanup_inactive_sessions()
+                    current_time = datetime.now()
+                    inactive_sessions = []
+                    for session_id, session in self.active_sessions.items():
+                        if (current_time - session.last_activity).total_seconds() > self.config.session_timeout:
+                            inactive_sessions.append(session_id)
+                    
+                    for session_id in inactive_sessions:
+                        session = self.active_sessions.pop(session_id)
+                        if session.agent_id in self.agent_registry:
+                            del self.agent_registry[session.agent_id]
+                        self.logger.info(f"Cleaned up inactive session: {session_id} for agent {session.agent_id}")
+                        # Optionally persist session status as 'terminated'
+                        session.status = 'terminated'
+                        await self._persist_session(session)
+                    
+                    await asyncio.sleep(600) # Check every 10 minutes
+                except asyncio.CancelledError:
+                    self.logger.info("Session cleanup cancelled.")
+                    break
                 except Exception as e:
-                    self.logger.error(f"Session cleanup error: {e}")
+                    self.logger.error(f"Error in session cleanup: {e}")
+                    await asyncio.sleep(60)
         
-        # Memory backup worker
         async def memory_backup():
+            """Periodically backup memory state"""
             while self.server_running:
                 try:
                     await asyncio.sleep(self.config.memory_backup_interval)
                     await self._backup_memory_state()
+                except asyncio.CancelledError:
+                    self.logger.info("Memory backup cancelled.")
+                    break
                 except Exception as e:
-                    self.logger.error(f"Memory backup error: {e}")
-        
+                    self.logger.error(f"Error in memory backup: {e}")
+                    await asyncio.sleep(60)
+
+        # VISINT / Daily Training Loop
+        async def daily_training_loop():
+            """
+            Autonomous Daily Training Loop
+            Executes full red-team kill chain workflows on simulated targets.
+            """
+            # Wait for server to fully start
+            await asyncio.sleep(5)
+            self.logger.info("Starting Autonomous Daily Training Loop")
+            
+            # Initialize Autonomous Orchestrator with callback
+            orchestrator = Orchestrator(autonomous_mode=True, event_callback=self._broadcast_event)
+            
+            while self.server_running:
+                try:
+                    if self.paused:
+                        await self._broadcast_event("training_update", {
+                            "status": "PAUSED",
+                            "message": "System halted by user command.",
+                            "action": "WAITING"
+                        })
+                        await asyncio.sleep(5)
+                        continue
+
+                    # 1. Select a Target
+                    # Check manual queue first
+                    if self.manual_target_queue:
+                        target = self.manual_target_queue.pop(0)
+                        self.logger.info(f"Processing MANUAL target: {target}")
+                    else:
+                        targets = [
+                            "scanme.nmap.org",
+                            "testphp.vulnweb.com",
+                            "dummy.target.corp", 
+                            "staging.finance-app.io"
+                        ]
+                        import random
+                        target = random.choice(targets)
+                    
+                    operation_id = str(uuid.uuid4())
+                    await self._broadcast_event("training_update", {
+                        "status": "INITIATING",
+                        "message": f"Identified new candidate target: {target}",
+                        "action": "TARGET_SELECTION"
+                    })
+                    
+                    await asyncio.sleep(5) # Simulation delay
+                    
+                    # 2. Setup Operation Context
+                    context = OperationContext(
+                        operation_id=operation_id,
+                        target=target,
+                        objectives=["reconnaissance", "initial_access", "post_exploitation"],
+                        constraints={"stealth": True},
+                        approval_required=False, # Autonomous
+                        stealth_mode=True
+                    )
+                    
+                    # 3. Execute Full Kill Chain Workflow
+                    await self._broadcast_event("system_log", {
+                        "level": "INFO", 
+                        "component": "Orchestrator", 
+                        "message": f"Launching Operation {operation_id} against {target}",
+                        "action": "START_WORKFLOW"
+                    })
+
+                    # Broadcast Workflow Start for UI Visualization
+                    await self._broadcast_event("workflow_update", {
+                        "type": "start",
+                        "operation_id": operation_id,
+                        "target": target,
+                        "workflow": "standard_red_team"
+                    })
+
+                    # Execute
+                    self.logger.info(f"Orchestrator starting workflow on {target}")
+                    results = await orchestrator.execute_workflow("standard_red_team", context)
+                    
+                    # 4. Report Results
+                    success = results.get("success", False)
+                    status = "COMPLETED" if success else "FAILED"
+                    
+                    await self._broadcast_event("training_update", {
+                        "status": status,
+                        "message": f"Operation finished. Logs saved to cognitive memory.",
+                        "action": "REPORTING"
+                    })
+
+                    # 5. EMBEDDING & TRAINING DATA GENERATION (Autonomous Learning)
+                    try:
+                        training_text = f"Operation: {operation_id}\nTarget: {target}\nSuccess: {success}\nResults: {json.dumps(results)}"
+                        self.embedding_memory.embed_and_store(
+                            content=training_text,
+                            source="daily_training_loop",
+                            metadata={"operation_id": operation_id, "target": target, "success": success}
+                        )
+                        self.logger.info(f"Generated training embedding for operation {operation_id}")
+                    except Exception as embed_err:
+                        self.logger.error(f"Embedding generation failed: {embed_err}")
+                    
+                    # Broadcast Workflow End
+                    await self._broadcast_event("workflow_update", {
+                        "type": "end",
+                        "status": status,
+                        "results": results
+                    })
+
+                    # Sleep before next cycle
+                    await asyncio.sleep(10)
+
+                except Exception as e:
+                    self.logger.error(f"Error in training loop: {e}")
+                    await asyncio.sleep(60)
+
         # Start background tasks
         self.background_tasks = [
             asyncio.create_task(task_processor()),
             asyncio.create_task(session_cleanup()),
-            asyncio.create_task(memory_backup())
+            asyncio.create_task(memory_backup()),
+            asyncio.create_task(daily_training_loop())
         ]
         
         self.server_start_time = datetime.now()
         self.logger.info("Background processes started")
+
+    async def _broadcast_event(self, event_type: str, data: Dict[str, Any]):
+        """Broadcast an event to all connected WebSocket clients AND log to database"""
+        
+        # 1. Log to Database if it's a relevant event
+        try:
+            timestamp = datetime.now().timestamp()
+            
+            # Map event types to log levels/components
+            level = "INFO"
+            component = "System"
+            message = f"Event: {event_type}"
+            details = json.dumps(data)
+            action = event_type
+            
+            if event_type == "system_log":
+                level = data.get("level", "INFO")
+                component = data.get("component", "System")
+                message = data.get("message", "")
+                details = data.get("details", "")
+                action = data.get("action", "LOG")
+            elif event_type == "training_update":
+                component = "TrainingLoop"
+                message = f"[{data.get('status')}] {data.get('message', '')} {data.get('action', '')}"
+            
+            # Insert into DB
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            conn.execute("""
+                INSERT INTO system_logs (timestamp, level, component, message, details, action)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (timestamp, level, component, message, details, action))
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            self.logger.error(f"Failed to persist system log: {e}")
+
+        # 2. Broadcast via WebSocket
+        message = json.dumps({
+            "type": event_type,
+            "timestamp": datetime.now().isoformat(),
+            **data
+        })
+        
+        to_remove = set()
+        for ws in self.websocket_connections:
+            try:
+                await self._send_ws_message(ws, message)
+            except Exception as e:
+                self.logger.error(f"Error broadcasting to client: {e}")
+                to_remove.add(ws)
+                
+        for ws in to_remove:
+            self.websocket_connections.discard(ws)
     
     async def _process_task(self, task: Dict[str, Any]):
         """Process a queued task"""

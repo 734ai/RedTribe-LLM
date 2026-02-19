@@ -25,8 +25,8 @@ from src.cognitive.persistent_reasoning_system import (
     ReasoningType,
     MemoryType
 )
-from server.persistent_agent_server import PersistentAgentServer, create_server_config
-from integration.persistent_multi_agent_integration import (
+from src.server.persistent_agent_server import PersistentAgentServer, create_server_config
+from src.integration.persistent_multi_agent_integration import (
     PersistentMultiAgentSystem, create_persistent_multi_agent_system
 )
 
@@ -53,7 +53,7 @@ class ServerConfiguration:
     ssl_key_path: Optional[str] = None
     max_connections: int = 1000
     session_timeout_hours: int = 24
-    memory_backup_interval_hours: int = 1
+    memory_backup_interval: int = 3600
     distributed_mode: bool = False
     cluster_nodes: List[str] = field(default_factory=list)
 
@@ -709,17 +709,27 @@ def create_development_config() -> PersistentCognitiveConfiguration:
     return config
 
 def create_production_config() -> PersistentCognitiveConfiguration:
-    """Create production configuration"""
+    """Create production configuration (Optimized for Hugging Face Spaces)"""
     
     config = PersistentCognitiveConfiguration()
     config.environment = "production"
     config.debug_mode = False
+    
+    # Use /data directory for persistent storage on HF Spaces
+    config.database.cognitive_db_path = "/data/cognitive_system.db"
+    config.database.server_db_path = "/data/server_agent_system.db"
+    config.logging.file_path = "/data/logs/persistent_cognitive_system.log"
+    
     config.logging.level = "INFO"
     config.logging.structured_logging = True
     config.database.backup_interval_hours = 24
     config.database.backup_retention_days = 90
-    config.server.port = 443
-    config.server.ssl_enabled = True
+    
+    # HF Spaces specific port and host
+    config.server.port = 7860
+    config.server.host = "0.0.0.0"
+    
+    config.server.ssl_enabled = False # TLS handled by HF Spaces LB
     config.security.authentication_enabled = True
     config.security.rate_limiting_enabled = True
     config.performance.optimization_level = "aggressive"

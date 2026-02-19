@@ -14,12 +14,30 @@ import json
 
 # ... (logging setup remains)
 
+from src.startup.persistent_cognitive_startup import create_production_config, create_development_config
+
 # Initialize persistent server
-config = ServerConfiguration(
-    port=7860,
-    distributed_mode=False
+if os.getenv("SPACE_ID"): # Hugging Face Spaces Environment
+    logger.info("Detected Hugging Face Spaces environment. Loading production config.")
+    config = create_production_config()
+else:
+    logger.info("Loading development config.")
+    config = create_development_config()
+    # Override port for local/mixed usage if needed, though dev config defaults to 8080 and app.py used 7860
+    config.server.port = 7860 
+
+# Extract the server config part for the Agent Server initialization
+# Note: PersistentCognitiveSystemManager usually handles this, but here we are manually initing.
+# However, PersistentAgentServer expects a ServerConfiguration object, which is nested in PersistentCognitiveConfiguration.
+server_config = config.server
+
+# Adjust DB paths in the server_config if possible or pass them manually?
+# PersistentAgentServer init signature: (config: ServerConfiguration, db_path: str)
+
+agent_server = PersistentAgentServer(
+    server_config,
+    db_path=config.database.server_db_path
 )
-agent_server = PersistentAgentServer(config)
 
 # Get the FastAPI app from the agent server
 app = FastAPI(title="Cyber-LLM DefenseOS")

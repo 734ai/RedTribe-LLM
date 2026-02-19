@@ -395,6 +395,28 @@ class C2Agent:
         logger.info(f"C2 setup complete for {request.target_environment}")
         return response
 
+    def execute_weaponization(self, request: Any) -> Dict[str, Any]:
+        """Execute weaponization phase (payload compilation)."""
+        # In a real scenario, this would compile/obfuscate the payload
+        logger.info(f"Executing weaponization for target {request.target_environment}")
+        return {
+            "status": "success", 
+            "artifact": "payload.exe",
+            "type": request.payload_type,
+            "hash": "sha256:7f83b1657c...9a",
+            "size": "14.2KB"
+        }
+
+    def execute_delivery(self, request: Any) -> Dict[str, Any]:
+        """Execute delivery phase (phishing/exploit)."""
+        logger.info(f"Executing delivery to {request.target_environment}")
+        return {
+            "status": "success",
+            "method": "Spearphishing Link",
+            "recipient": "admin@target.corp",
+            "sent_at": datetime.now().isoformat()
+        }
+
 def main():
     """CLI interface for C2Agent."""
     import argparse

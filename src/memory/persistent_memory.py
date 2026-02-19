@@ -20,6 +20,7 @@ import numpy as np
 from collections import defaultdict, deque
 import threading
 import time
+from sentence_transformers import SentenceTransformer, util
 
 from ..utils.logging_system import CyberLLMLogger, CyberLLMError, ErrorCategory
 from ..utils.secrets_manager import get_secrets_manager
@@ -67,6 +68,7 @@ class MemoryItem:
     source: str = "unknown"
     validated: bool = False
     compressed: bool = False
+    embedding: Optional[np.ndarray] = None
 
 @dataclass
 class ReasoningChain:
@@ -141,6 +143,15 @@ class PersistentMemoryManager:
         self.consolidation_running = False
         self.consolidation_thread = None
         
+        # Initialize Embedding Model (Optimized for CPU)
+        try:
+            self.logger.info("Initializing Embedding Model (all-MiniLM-L6-v2)...")
+            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+            self.logger.info("Embedding Model Initialized.")
+        except Exception as e:
+            self.logger.error(f"Failed to load embedding model: {e}")
+            self.embedding_model = None
+        
         # Initialize memory system
         asyncio.create_task(self._initialize_memory_system())
         
@@ -173,7 +184,8 @@ class PersistentMemoryManager:
                     agent_id TEXT,
                     source TEXT,
                     validated BOOLEAN DEFAULT FALSE,
-                    compressed BOOLEAN DEFAULT FALSE
+                    compressed BOOLEAN DEFAULT FALSE,
+                    embedding BLOB
                 )
             """)
             
@@ -263,6 +275,15 @@ class PersistentMemoryManager:
             agent_id=agent_id,
             source="direct_storage"
         )
+        
+        # Generate Embedding
+        if self.embedding_model:
+            try:
+                text_content = str(content)
+                embedding = self.embedding_model.encode(text_content, convert_to_tensor=False)
+                memory_item.embedding = embedding
+            except Exception as e:
+                self.logger.error(f"Failed to generate embedding for memory {memory_id}: {e}")
         
         # Store in appropriate memory system
         if memory_type == MemoryType.EPISODIC:
@@ -534,7 +555,8 @@ class PersistentMemoryManager:
                     agent_id=row[11],
                     source=row[12],
                     validated=bool(row[13]),
-                    compressed=bool(row[14])
+                    compressed=bool(row[14]),
+                    embedding=pickle.loads(row[15]) if len(row) > 15 and row[15] else None
                 )
                 
                 # Store in appropriate memory system
@@ -593,27 +615,34 @@ class PersistentMemoryManager:
             self.logger.error("Failed to load persistent memories", error=str(e))
     
     async def _calculate_relevance(self, query: str, memory: MemoryItem) -> float:
-        """Calculate relevance score between query and memory"""
+        """Calculate relevance score between query and memory using Embeddings"""
         
-        # Simple relevance calculation (would use embeddings in production)
+        if self.embedding_model and memory.embedding is not None:
+            try:
+                query_embedding = self.embedding_model.encode(query, convert_to_tensor=False)
+                # Cosine Similarity
+                similarity = util.cos_sim(query_embedding, memory.embedding).item()
+                
+                # Boost based on importance and recency
+                importance_boost = memory.importance_score * 0.1
+                recency_boost = min(0.1, 1.0 / ((datetime.now() - memory.last_accessed).days + 1))
+                
+                return min(1.0, similarity + importance_boost + recency_boost)
+            except Exception as e:
+                self.logger.error(f"Embedding comparison failed: {e}")
+        
+        # Fallback to Jaccard/keyword similarity
         query_words = set(query.lower().split())
         memory_text = str(memory.content).lower()
         memory_words = set(memory_text.split())
         
-        # Jaccard similarity
         intersection = len(query_words.intersection(memory_words))
         union = len(query_words.union(memory_words))
         
         if union == 0:
             return 0.0
         
-        base_similarity = intersection / union
-        
-        # Boost based on importance and recency
-        importance_boost = memory.importance_score * 0.3
-        recency_boost = min(0.2, 1.0 / ((datetime.now() - memory.last_accessed).days + 1))
-        
-        return min(1.0, base_similarity + importance_boost + recency_boost)
+        return intersection / union
     
     async def _execute_deductive_step(self, chain: ReasoningChain, step_content: Dict[str, Any]) -> Dict[str, Any]:
         """Execute deductive reasoning step"""
@@ -711,8 +740,8 @@ class PersistentMemoryManager:
                 INSERT OR REPLACE INTO memory_items
                 (memory_id, memory_type, content, created_at, last_accessed, access_count,
                  importance_score, confidence, decay_rate, associated_memories, context_tags,
-                 agent_id, source, validated, compressed)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 agent_id, source, validated, compressed, embedding)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 memory_item.memory_id,
                 memory_item.memory_type.value,
@@ -728,7 +757,8 @@ class PersistentMemoryManager:
                 memory_item.agent_id,
                 memory_item.source,
                 memory_item.validated,
-                memory_item.compressed
+                memory_item.compressed,
+                pickle.dumps(memory_item.embedding) if memory_item.embedding is not None else None
             ))
             
             conn.commit()

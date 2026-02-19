@@ -1,92 +1,129 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cyber-LLM // DefenseOS</title>
-    
-    <!-- Fonts -->
+    <title>OVERLORD // DEFENSE OPERATIONS</title>
+    <!-- Technical Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-    
-    <!-- Local Styles -->
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="/static/css/defense_os.css">
 </head>
+
 <body>
-    <div class="scan-overlay"></div>
-    
-    <div class="grid-container">
+    <div class="app-container">
         <!-- HEADER -->
-        <header class="header">
-            <div class="logo">Cyber-LLM <span style="color:var(--text-secondary)">//</span> DefenseOS</div>
-            <div class="status-bar">
-                <div class="status-item">SYSTEM: <span id="connection-status">INITIALIZING</span></div>
-                <div class="status-item">TIME: <span id="system-clock">--:--:--</span></div>
+        <header class="global-header">
+            <div class="brand">
+                <span class="icon">⚠️</span> CYBER_LLM // OVERLORD
+            </div>
+            <div class="system-status">
+                <div class="status-metric">DEFCON <span class="value" style="color:red">3</span></div>
+                <div class="status-metric">ACTIVE_OPS <span class="value">1</span></div>
+                <div class="status-metric">UPTIME <span class="value" id="uptime">00:00:00</span></div>
             </div>
         </header>
 
-        <!-- LEFT SIDEBAR: AGENT STATUS -->
-        <aside class="sidebar-left panel">
-            <div class="panel-header">
-                Active Agents
-                <div class="status-led green"></div>
-            </div>
-            <div class="panel-content">
-                <div class="metric-card">
-                    <div class="metric-label">Orchestrator</div>
-                    <div class="metric-value" id="metric-orchestrator">ONLINE</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Reconnaissance</div>
-                    <div class="metric-value" id="metric-recon">IDLE</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">C2 Infrastructure</div>
-                    <div class="metric-value" id="metric-c2">STANDBY</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Cognitive Engine</div>
-                    <div class="metric-value" id="metric-cognitive">ACTIVE</div>
-                </div>
-            </div>
-        </aside>
+        <!-- COMMAND CENTER LAYOUT -->
+        <div class="command-center-grid">
 
-        <!-- CENTER: MAIN VISUALIZATION -->
-        <main class="main-view panel">
-            <div class="panel-header">Tactical Map // Global Threat Overlay</div>
-            <div class="panel-content" style="display:flex; justify-content:center; align-items:center;">
-                <!-- Placeholder for map/visualization -->
-                <div style="text-align:center; color: var(--text-secondary); font-family: var(--font-mono);">
-                    <div style="font-size: 3rem; margin-bottom: 20px; opacity: 0.5;">Waiting for Target...</div>
-                    <div>Awaiting Uplink Data</div>
+            <!-- LEFT: MISSION STATUS -->
+            <aside class="col-left">
+                <div class="module" style="flex: 0 0 auto;">
+                    <div class="module-header"><span class="title">01 AGENT SQUADRON</span></div>
+                    <div class="module-content" id="agent-status-list">
+                        <!-- Dynamic Agents -->
+                        <div class="agent-row" id="agent-recon"><span class="status-dot"></span> RECONNAISSANCE</div>
+                        <div class="agent-row" id="agent-c2"><span class="status-dot"></span> C2 / ACCESS</div>
+                        <div class="agent-row" id="agent-weaponization"><span class="status-dot"></span> WEAPONIZATION
+                        </div>
+                        <div class="agent-row" id="agent-delivery"><span class="status-dot"></span> DELIVERY</div>
+                        <div class="agent-row" id="agent-post_exploitation"><span class="status-dot"></span>
+                            POST-EXPLOIT</div>
+                    </div>
                 </div>
-            </div>
-        </main>
 
-        <!-- RIGHT SIDEBAR: INTEL FEED -->
-        <aside class="sidebar-right panel">
-            <div class="panel-header">Intelligence Feed</div>
-            <div class="panel-content" id="intel-feed">
-                <!-- Dynamically populated -->
-                <div class="log-entry"><span class="log-time">[SYSTEM]</span> Looking for indicators...</div>
-            </div>
-        </aside>
+                <div class="module" style="flex: 1;">
+                    <div class="module-header"><span class="title">02 KILL CHAIN PHASE</span></div>
+                    <div class="module-content" id="sequencer-content">
+                        <!-- Vertical Sequencer -->
+                    </div>
+                </div>
+            </aside>
 
-        <!-- BOTTOM: CONSOLE -->
-        <footer class="console panel">
-            <div class="panel-header">Command Interface</div>
-            <div class="panel-content" id="system-logs">
-                <!-- System logs go here -->
-            </div>
-            <div style="padding: 10px; border-top: 1px solid var(--border-color); display:flex; gap:10px;">
-                <input type="text" id="command-input" class="input-field" placeholder="Enter command or target (e.g. 'analyze 192.168.1.1' or 'run workflow alpha')">
-                <button id="execute-btn" class="btn">EXECUTE</button>
-            </div>
-        </footer>
+            <!-- CENTER: MAIN TERMINAL (LIVE TRAINING) -->
+            <main class="col-center">
+                <div class="module full-height">
+                    <div class="module-header">
+                        <span class="title">>> TERMINAL // LIVE_TRAINING_STREAM</span>
+                        <span class="live-indicator" id="live-indicator" style="cursor: pointer;">● LIVE</span>
+                    </div>
+                    <div class="module-content terminal-output" id="main-terminal">
+                        <div class="term-line system">Waiting for satellite uplink...</div>
+                        <div class="term-line system">Connection established.</div>
+                        <div class="term-line system">Listening for agent telemetry...</div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- RIGHT: SITUATIONAL AWARENESS -->
+            <aside class="col-right">
+                <div class="module" style="height: 40%;">
+                    <div class="module-header"><span class="title">04 TACTICAL MAP</span></div>
+                    <div class="module-content padding-0" style="padding:0;">
+                        <canvas id="tactical-canvas"></canvas>
+                        <div class="overlay-stats">
+                            NODES: <span id="node-count">0</span><br>
+                            TARGETS: <span id="target-count">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module" style="height: 20%;">
+                    <div class="module-header"><span class="title">05 CONTROLS</span></div>
+                    <div class="module-content">
+                        <div class="control-group">
+                            <label>MANUAL TARGET INJECTION</label>
+                            <div class="input-row">
+                                <input type="text" id="target-input" placeholder="IP / DOMAIN">
+                                <button id="btn-inject" class="btn">INJECT</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="module" style="flex: 1;">
+                    <div class="module-header"><span class="title">06 SYSTEM TELEMETRY</span></div>
+                    <div class="module-content">
+                        <!-- Telemetry Placeholders -->
+                        <div class="telemetry-row">
+                            <span>CPU_CORE_0</span>
+                            <div class="bar-container">
+                                <div class="bar-fill" style="width: 45%"></div>
+                            </div>
+                        </div>
+                        <div class="telemetry-row">
+                            <span>MEM_ALLOC</span>
+                            <div class="bar-container">
+                                <div class="bar-fill" style="width: 62%"></div>
+                            </div>
+                        </div>
+                        <div class="telemetry-row">
+                            <span>NET_GIGABIT</span>
+                            <div class="bar-container">
+                                <div class="bar-fill" style="width: 12%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+        </div>
     </div>
-
-    <!-- Scripts -->
-    <script src="/static/js/mission_control.js"></script>
+    <script src="/static/js/mission_control.js?v=overlord_rc5_interactive"></script>
 </body>
+
 </html>
