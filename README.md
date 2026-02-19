@@ -1,18 +1,6 @@
----
-title: Cyber-LLM Advanced Operations Center
-emoji: 🛡️
-colorFrom: gray
-colorTo: blue
-sdk: docker
-pinned: true
-license: mit
-short_description: Enterprise Autonomous AI Security Operations Platform
-app_port: 7860
----
+# Cyber-LLM: Enterprise Autonomous Security Operations Center
 
-# 🛡️ Cyber-LLM: Enterprise Autonomous Security Operations Center
-
-[![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/NorthernTribe-Research/cyber_llm)
+[![Hugging Face Spaces](https://img.shields.io/badge/Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/NorthernTribe-Research/cyber_llm)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/NorthernTribe-Research/cyber-llm)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -24,21 +12,21 @@ app_port: 7860
 
 ---
 
-## 🚀 Key Capabilities
+## Key Capabilities
 
-### 🤖 Autonomous "Overlord" Architecture
+### Autonomous "Overlord" Architecture
 The system runs on a continuous **24/7 Intelligence Loop** that requires zero human intervention.
 -   **Self-Healing Workflows**: Agents autonomously recover from failed steps and retry with adjusted parameters.
 -   **Priority Interrupts**: Human operators can inject targets manually, instantly pausing the background training loop.
 -   **Continuous Training**: When idle, the system runs simulated red-team operations against safe targets to refine its neural embeddings.
 
-### 🧠 Cognitive Memory Systems
+### Cognitive Memory Systems
 Unlike stateless scripts, Cyber-LLM remembers.
 -   **Semantic Memory**: Uses `sentence-transformers` (all-MiniLM-L6-v2) to embed and recall past operation strategies.
 -   **Episodic Replay**: Stores full operation traces for retrospective analysis and fine-tuning.
--   **Persistent Knowledge Graph**: Maos relationships between discovered entities (IPs, Domains, Vulnerabilities).
+-   **Persistent Knowledge Graph**: Maps relationships between discovered entities (IPs, Domains, Vulnerabilities).
 
-### ⚔️ Full Kill-Chain Coverage
+### Full Kill-Chain Coverage
 The platform orchestrates specialized agents across the entire MITRE ATT&CK lifecycle:
 1.  **Reconnaissance**: `ReconAgent` (Nmap, OSINT, HTTP Analysis)
 2.  **Weaponization**: `WeaponizationAgent` (Payload generation, Obfuscation)
@@ -50,11 +38,11 @@ The platform orchestrates specialized agents across the entire MITRE ATT&CK life
 
 ---
 
-## 💻 Tech Stack & Architecture
+## Tech Stack & Architecture
 
 ### **Core Backend**
 -   **FastAPI / Uvicorn**: High-performance asynchronous server.
--   **Python 3.11+**: Typer-safe, modern codebase.
+-   **Python 3.11+**: Type-safe, modern codebase.
 -   **SQLite / Vector Store**: Lightweight, portable persistence.
 
 ### **Frontend "Mission Control"**
@@ -68,7 +56,7 @@ The platform orchestrates specialized agents across the entire MITRE ATT&CK life
 
 ---
 
-## 🛠️ Usage
+## Usage
 
 ### **Local Deployment**
 ```bash
@@ -91,7 +79,7 @@ docker run -p 7860:7860 cyber-llm
 
 ---
 
-## 📊 API Reference
+## API Reference
 
 The platform exposes a full REST API for integration with external SIEM/SOAR tools.
 
@@ -105,7 +93,7 @@ The platform exposes a full REST API for integration with external SIEM/SOAR too
 
 ---
 
-## 🔒 Security & Ethics
+## Security & Ethics
 
 **Cyber-LLM is a research platform.**
 It is designed to simulate adversarial behaviors for the purpose of **defensive training** and **security posture validation**.
